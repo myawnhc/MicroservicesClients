@@ -1,0 +1,14 @@
+# Service configurations for Microservices Client
+---
+service_name: account-service
+#grpc_hostname: acctsvc
+grpc_hostname: localhost
+grpc_port: 50051
+---
+service_name: order-service
+grpc_hostname: ordersvc
+grpc_port: 50052
+---
+service_name: inventory-service
+grpc_hostname: invsvc
+grpc_port: 50053
