@@ -24,6 +24,11 @@
             <artifactId>InventoryProto</artifactId>
             <version>1.0-SNAPSHOT</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.myawnhc</groupId>
+            <artifactId>OrderProto</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
         <!-- jackson dependencies for yaml parsing in configuration -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
