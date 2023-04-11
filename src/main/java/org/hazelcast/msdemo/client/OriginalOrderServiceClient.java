@@ -24,6 +24,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
+import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.hazelcast.msdemo.config.ServiceConfig;
 import org.hazelcast.msfdemo.ordersvc.events.OrderGrpc;
 import org.hazelcast.msfdemo.ordersvc.events.OrderOuterClass;
@@ -36,30 +37,37 @@ import java.util.concurrent.Executors;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static org.hazelcast.msfdemo.ordersvc.events.OrderOuterClass.CreateOrderResponse;
-
-public class OrderServiceClient {
-    private static final Logger logger = Logger.getLogger(OrderServiceClient.class.getName());
+public class OriginalOrderServiceClient {
+    private static final Logger logger = Logger.getLogger(OriginalOrderServiceClient.class.getName());
     private final OrderGrpc.OrderBlockingStub blockingStub; // unused
     private final OrderGrpc.OrderFutureStub futureStub;
     private final OrderGrpc.OrderStub asyncStub;
-    private static final int ORDERS_TO_PLACE = 10;  // will be 1K or so eventually
-    private static int ordersAcknowledged = 0;
+    // probably temporary, for debugging
+    boolean stackTraceAlreadyShown = false;
 
     private List<String> validAccounts;
 
     public static void main(String[] args) {
+        // Access a service running on the local machine on port 50052
+        //String target = "localhost:50052";
         ServiceConfig.ServiceProperties props = ServiceConfig.get("order-service");
         String target = props.getTarget();
-        logger.info("Target from service.yaml: " + target);
+        logger.info("Target from service.yaml " + target);
 
+        // Create a communication channel to the server, known as a Channel. Channels are thread-safe
+        // and reusable. It is common to create channels at the beginning of your application and reuse
+        // them until the application shuts down.
         ManagedChannel channel = ManagedChannelBuilder.forTarget(target)
+                // Channels are secure by default (via SSL/TLS). For the example we disable TLS to avoid
+                // needing certificates.
                 .usePlaintext()
                 .build();
 
         try {
-            OrderServiceClient orderServiceClient = new OrderServiceClient(channel);
-            logger.info("Waiting for ordersvc to become ready");
+            System.out.println("Before OSC create");
+            OriginalOrderServiceClient orderServiceClient = new OriginalOrderServiceClient(channel);
+            // Wait for service to become ready
+            System.out.println("Wait for ordersvc");
             boolean notReady = true;
             while (notReady) {
                 try (Socket ignored = new Socket(props.getGrpcHostname(), props.getGrpcPort())) {
@@ -69,27 +77,30 @@ public class OrderServiceClient {
                     Thread.sleep(1000);
                 } catch (InterruptedException e) {}
             }
-//            System.out.println("Ordsvc ready, subscribe");
-//            orderServiceClient.subscribeToShipmentNotifications();
-//            System.out.println("subscribed, send orders");
-            orderServiceClient.sendOrders();
-        } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Ordsvc ready, subscribe");
+            orderServiceClient.subscribeToShipmentNotifications();
+            System.out.println("subscribed, send orders");
+            orderServiceClient.nonBlockingOrder();
+        } finally {
+
         }
 
-        while (ordersAcknowledged < ORDERS_TO_PLACE) {
+        // Could wait for all orders to be fully processed and then exit (perhaps
+        // by incrementing a counter in OrderEventResponseProcessor.onCompleted() and
+        // exiting when it equals number of orders placed).  For now, we just hold
+        // until interrupted.
+        while (true) {
             try {
-                Thread.sleep(5_000);
+                Thread.sleep(60_000);
             } catch (InterruptedException e) {
 
             }
         }
-        logger.info("All orders acknowledged");
 
     }
 
     /** Construct client for accessing server using the existing channel. */
-    public OrderServiceClient(Channel channel) {
+    public OriginalOrderServiceClient(Channel channel) {
         // 'channel' here is a Channel, not a ManagedChannel, so it is not this code's responsibility to
         // shut it down.
 
@@ -102,6 +113,8 @@ public class OrderServiceClient {
 
     private void retrieveAccountInfo() {
         AccountServiceClient asc = new AccountServiceClient();
+        // Expect no accounts initially, but check in case we later make account info
+        // persistent.
         try {
             validAccounts = asc.getAllAccountNumbers();
             // Now that dataload is separated out, we don't expect to see empty account list
@@ -120,6 +133,30 @@ public class OrderServiceClient {
         }
     }
 
+//    private static class OrderEventResponseProcessor implements StreamObserver<OrderEventResponse> {
+//
+//        @Override
+//        public void onNext(OrderEventResponse orderEventResponse) {
+//            System.out.println("Received response: " + formatResponse(orderEventResponse));
+//        }
+//
+//        @Override
+//        public void onError(Throwable throwable) {
+//            System.out.println("onError " + throwable);
+//        }
+//
+//        @Override
+//        public void onCompleted() { }
+//    }
+
+//    static String formatResponse(OrderEventResponse response) {
+//        return response.getEventName() + " O:" + response.getOrderNumber() +
+//                " A:" + response.getAccountNumber() +
+//                " I: " + response.getItemNumber() +
+//                " L: " + response.getLocation() +
+//                " Q: " + response.getQuantity() +
+//                " $: " + response.getExtendedPrice();
+//    }
 
     public void subscribeToShipmentNotifications() {
         System.out.println("Sending subscribe request for order shipments");
@@ -147,21 +184,7 @@ public class OrderServiceClient {
         });
     }
 
-    FutureCallback<CreateOrderResponse> createOrderResponseCallback = new FutureCallback<>() {
-        @Override
-        public void onSuccess(CreateOrderResponse createOrderResponse) {
-            System.out.println("Order created: " + createOrderResponse.getOrderNumber());
-            ordersAcknowledged++;
-        }
-
-        @Override
-        public void onFailure(Throwable throwable) {
-            System.out.println("Order creation failed: " + throwable.getMessage());
-            throwable.printStackTrace();
-        }
-    };
-
-    public void sendOrders()  {
+    public void nonBlockingOrder()  {
         logger.info("Starting OSC.sendOrders");
 
         // Data generation for inventory might be happening concurrently with the
@@ -181,7 +204,8 @@ public class OrderServiceClient {
         System.out.println("Starting to place orders, inventory record count " + invRecordCount);
         int NUM_LOCATIONS = 100;
         int maxSafeItem = invRecordCount / NUM_LOCATIONS;
-        for (int i=0; i<ORDERS_TO_PLACE; i++) {
+        // Bumping order count to 100, will eventually probably be much larger.
+        for (int i=0; i<100; i++) {
             int index = (int)(Math.random()*validAccounts.size());
             String acctNumber = validAccounts.get(index);
             int itemOffset = (int)(Math.random()*maxSafeItem+1);
@@ -198,8 +222,24 @@ public class OrderServiceClient {
             try {
                 Executor e = Executors.newCachedThreadPool();
                 //futures.add(futureStub.createOrder(request));
-                ListenableFuture<OrderOuterClass.CreateOrderResponse> createOrderFuture = futureStub.createOrder(request);
-                Futures.addCallback(createOrderFuture,createOrderResponseCallback, e);
+                ListenableFuture<OrderOuterClass.CreateOrderResponse> future = futureStub.createOrder(request);
+                Futures.addCallback(future, new FutureCallback<OrderOuterClass.CreateOrderResponse>() {
+
+                    @Override
+                    public void onSuccess(@NullableDecl OrderOuterClass.CreateOrderResponse createOrderResponse) {
+                        System.out.println("Order created: " + createOrderResponse.getOrderNumber());
+
+                    }
+
+                    @Override
+                    public void onFailure(Throwable throwable) {
+                        System.out.println("Order creation failed: " + throwable.getMessage());
+                        if (!stackTraceAlreadyShown) {
+                            throwable.printStackTrace();
+                            stackTraceAlreadyShown = true;
+                        }
+                    }
+                }, e);
                 // When changed to server-side streaming RPC, createOrder disappeared from futureStub!
                 //asyncStub.createOrder(request, new OrderEventResponseProcessor());
                 System.out.println("Placed order " + i);
