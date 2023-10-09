@@ -43,7 +43,7 @@ public class OrderServiceClient {
     private final OrderGrpc.OrderBlockingStub blockingStub; // unused
     private final OrderGrpc.OrderFutureStub futureStub;
     private final OrderGrpc.OrderStub asyncStub;
-    private static final int ORDERS_TO_PLACE = 10;  // will be 1K or so eventually
+    private static final int ORDERS_TO_PLACE = 1_000;  // will be 1K or so eventually
     private static int ordersAcknowledged = 0;
 
     private List<String> validAccounts;
@@ -110,6 +110,9 @@ public class OrderServiceClient {
                 asc.openTestAccounts(1000);
                 validAccounts = asc.getAllAccountNumbers();
                 logger.info("After test data init, have " + validAccounts.size() + " accounts");
+            } else {
+                logger.info("Retrieved info on " + validAccounts.size() + " accounts");
+
             }
         } catch (StatusRuntimeException e) {
             try {

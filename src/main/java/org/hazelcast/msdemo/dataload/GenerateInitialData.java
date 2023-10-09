@@ -26,6 +26,8 @@ public class GenerateInitialData {
                 asc.openTestAccounts(1000);
                 validAccounts = asc.getNumberOfAccounts();
                 logger.info("After test data init, have " + validAccounts + " accounts");
+            } else {
+                logger.info("Account info was already initialized for " + validAccounts + " accounts");
             }
         } catch (io.grpc.StatusRuntimeException e) {
             e.printStackTrace();

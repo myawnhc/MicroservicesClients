@@ -24,7 +24,6 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-import org.checkerframework.checker.nullness.compatqual.NullableDecl;
 import org.hazelcast.msdemo.config.ServiceConfig;
 import org.hazelcast.msfdemo.ordersvc.events.OrderGrpc;
 import org.hazelcast.msfdemo.ordersvc.events.OrderOuterClass;
@@ -226,7 +225,7 @@ public class OriginalOrderServiceClient {
                 Futures.addCallback(future, new FutureCallback<OrderOuterClass.CreateOrderResponse>() {
 
                     @Override
-                    public void onSuccess(@NullableDecl OrderOuterClass.CreateOrderResponse createOrderResponse) {
+                    public void onSuccess(OrderOuterClass.CreateOrderResponse createOrderResponse) {
                         System.out.println("Order created: " + createOrderResponse.getOrderNumber());
 
                     }

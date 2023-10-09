@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -373,12 +374,17 @@ public class AccountServiceClient {
             }
         }
 
+        // Can use successfulAsList rather than allAsList to get only good responses
+        logger.info("Consolidating futures for " + futures.size() + " transfer requests");
+        ListenableFuture<List<TransferMoneyResponse>> responseList = Futures.allAsList();
+        List<TransferMoneyResponse> responses = null;
         try {
-            // Can use successfulAsList rather than allAsList to get only good responses
-            ListenableFuture<List<TransferMoneyResponse>> responseList = Futures.allAsList(futures);
-            List<TransferMoneyResponse> responses = responseList.get();
+            logger.info("Getting responses");
+            responses = responseList.get(1, TimeUnit.MINUTES);
             logger.info("Successful transfer response count for group " + prefix + " = " + responses.size());
             return responses.size();
+        } catch (TimeoutException te) {
+            logger.info("Timed out after 1 minute with " + responses.size() + " responses");
         } catch (InterruptedException e) {
             e.printStackTrace();
         } catch (ExecutionException e) {

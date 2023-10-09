@@ -286,7 +286,7 @@ public class InventoryDataGenerator {
         for (int item=startingItem; item<maxItem; item++) {
             for (int lidx = 0; lidx < locationsPerItem; lidx++) {
                 while (currentInFlightRequests > maxInFlightRequests) {
-                    System.out.println("Pausing: in flight " + currentInFlightRequests + " exceeds threshold " + maxInFlightRequests);
+                    //System.out.println("Pausing: in flight " + currentInFlightRequests + " exceeds threshold " + maxInFlightRequests);
                     try {
                         Thread.sleep(1000);
                     } catch (InterruptedException e) {
